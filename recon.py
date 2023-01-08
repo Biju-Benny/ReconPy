@@ -3,13 +3,14 @@ output_workbook = 'output.xlsx'
 
 #read excel file
 dfPortal = pd.read_excel('Portal.xlsx')
-dfStore = pd.read_excel('Store.xlsx')
+dfStoreRaw = pd.read_excel('Store.xlsx')
+dfStore = dfStoreRaw.groupby(['Bill No']).sum(numeric_only=True).reset_index()
 
 #find duplicate Entries in Portal
 dfPortalDup = dfPortal[dfPortal.duplicated('Bill No')]
 
 #joing two sheets on bill no column
-df1 = pd.merge(dfStore ,dfPortal[['Bill No','PortalGross','PortalTax','PortalNet']],
+df1 = pd.merge(dfStore ,dfPortal[['Bill No','PortalGross','PortalTax','PortalNet','PortalReturn','PortalDiscount']],
  on = 'Bill No',indicator = True, how='outer')
 
 #extract bills that are present only in Store report
@@ -53,6 +54,28 @@ dfCommons.drop(['TaxDiff'],axis=1,inplace=True)
 dfTaxDiff = dfCommons[dfCommons['TaxDiffAbs'] > 1 ]
 dfTaxDiff.loc['Total', 'TaxDiffAbs'] = dfTaxDiff.TaxDiffAbs.sum()
 
+#find bills with difference in Return
+#find difference in Return and then find absolute value of that difference 
+dfCommons.drop(['TaxDiffAbs'],axis=1,inplace=True) 
+dfCommons = dfCommons.assign(ReturnDiff=(dfCommons['StoreReturn'] - dfCommons['PortalReturn']))
+dfCommons = dfCommons.assign(ReturnDiffAbs=(dfCommons['ReturnDiff'].abs()))
+dfCommons.drop(['ReturnDiff'],axis=1,inplace=True) 
+#filter table where Return  difference in greater than 1, taking rounding in to consideration
+dfReturnDiff = dfCommons[dfCommons['ReturnDiffAbs'] > 1 ]
+dfReturnDiff.loc['Total', 'ReturnDiffAbs'] = dfReturnDiff.ReturnDiffAbs.sum()
+
+#find bills with difference in Dicount
+#find difference in Disount and then find absolute value of that difference 
+dfCommons.drop(['ReturnDiffAbs'],axis=1,inplace=True) 
+dfCommons = dfCommons.assign(DiscountDiff=(dfCommons['StoreDiscount'] - dfCommons['PortalDiscount']))
+dfCommons = dfCommons.assign(DiscountDiffAbs=(dfCommons['DiscountDiff'].abs()))
+dfCommons.drop(['DiscountDiff'],axis=1,inplace=True) 
+#filter table where Discount  difference in greater than 1, taking rounding in to consideration
+dfDiscountDiff = dfCommons[dfCommons['DiscountDiffAbs'] > 1 ]
+dfDiscountDiff.loc['Total', 'DiscountDiffAbs'] = dfDiscountDiff.DiscountDiffAbs.sum()
+
+
+
 
 
 
@@ -62,6 +85,8 @@ with pd.ExcelWriter('output.xlsx') as writer:
     dfGrossDiff.to_excel(writer,sheet_name='GrossDifference',index=False)
     dfNetDiff.to_excel(writer,sheet_name='NetDifference',index=False)
     dfTaxDiff.to_excel(writer,sheet_name='TaxDifference',index=False)
+    dfDiscountDiff.to_excel(writer,sheet_name='DiscountDifference',index=False)
+    dfReturnDiff.to_excel(writer,sheet_name='ReturnDifference',index=False)
     dfPortalDup.to_excel(writer,sheet_name='DuplicatesInPortal',index=False)
 
 
